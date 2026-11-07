@@ -1,0 +1,14 @@
+{
+  "name": "prochitano",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Простой офлайн-список прочитанных книг в виде PWA",
+  "scripts": {
+    "test": "node test/domain.test.js && node test/parse.test.js && node test/store.test.js && node test/seed.test.js",
+    "seed": "node tools/build-seed.mjs",
+    "serve": "node tools/serve.mjs 8080",
+    "smoke": "node tools/smoke.mjs",
+    "icons": "python tools/make_icons.py"
+  }
+}

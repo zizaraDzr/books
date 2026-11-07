@@ -1,0 +1,5 @@
+node_modules/
+tmp/
+tools/raw-lines.json
+.DS_Store
+Thumbs.db
