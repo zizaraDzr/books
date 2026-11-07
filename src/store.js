@@ -1,7 +1,8 @@
-import { FORMATS, dedupeBooks, normalizeSpaces } from "./domain.js";
+import { dedupeBooks, normalizeSpaces } from "./domain.js";
 
-export const KEY = "books:v1";
-const VERSION = 1;
+export const KEY = "books:v2";
+export const LEGACY_KEY = "books:v1";
+const VERSION = 2;
 
 export function newId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -16,18 +17,59 @@ function parseYear(value) {
   return year >= 1900 && year <= 2100 ? year : null;
 }
 
+function parseNumber(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : null;
+}
+
 export function normalizeBook(raw) {
   if (!raw || typeof raw !== "object") return null;
   const title = normalizeSpaces(raw.title);
   if (!title) return null;
   return {
     id: typeof raw.id === "string" && raw.id.trim() ? raw.id : newId(),
+    number: parseNumber(raw.number),
     title,
     author: typeof raw.author === "string" ? normalizeSpaces(raw.author) : "",
-    format: FORMATS.includes(raw.format) ? raw.format : "unknown",
+    format: raw.format === "audio" ? "audio" : "book",
     year: parseYear(raw.year),
     addedAt: Number.isFinite(raw.addedAt) ? raw.addedAt : Date.now(),
   };
+}
+
+function seedNumbers(seed) {
+  const numbers = new Map();
+  for (const raw of seed) {
+    const book = normalizeBook(raw);
+    if (book?.number) numbers.set(book.id, book.number);
+  }
+  return numbers;
+}
+
+function assignNumbers(books, seed) {
+  const known = seedNumbers(seed);
+  const hasSeed = books.some((book) => known.has(book.id));
+  let next = (hasSeed ? Math.max(0, ...known.values()) : 0) + 1;
+  const used = new Set();
+
+  for (const book of books) {
+    let number = book.number ?? known.get(book.id) ?? null;
+    if (number && used.has(number)) number = null;
+    if (number) used.add(number);
+    book.number = number;
+  }
+
+  if (used.size) next = Math.max(next, Math.max(...used) + 1);
+
+  for (const book of books) {
+    if (book.number) continue;
+    while (used.has(next)) next += 1;
+    book.number = next;
+    used.add(next);
+    next += 1;
+  }
+
+  return books;
 }
 
 export function saveBooks(storage, books) {
@@ -39,29 +81,42 @@ export function saveBooks(storage, books) {
   }
 }
 
-export function loadBooks(storage, seed = []) {
+function readList(storage, key) {
   let raw = null;
   try {
-    raw = storage.getItem(KEY);
+    raw = storage.getItem(key);
   } catch {
-    raw = null;
+    return { raw: null, list: null };
   }
+  if (raw === null) return { raw: null, list: null };
 
-  if (raw !== null) {
-    try {
-      const data = JSON.parse(raw);
-      const list = Array.isArray(data) ? data : Array.isArray(data?.books) ? data.books : null;
-      if (list) {
-        const books = list.map(normalizeBook).filter(Boolean);
-        if (books.length || list.length === 0) return { books, seeded: false };
+  try {
+    const data = JSON.parse(raw);
+    const list = Array.isArray(data) ? data : Array.isArray(data?.books) ? data.books : null;
+    return { raw, list };
+  } catch {
+    return { raw, list: null };
+  }
+}
+
+export function loadBooks(storage, seed = []) {
+  for (const key of [KEY, LEGACY_KEY]) {
+    const { raw, list } = readList(storage, key);
+    if (raw === null) continue;
+    if (!list) {
+      try {
+        storage.setItem(`${key}:broken`, raw);
+      } catch {
+        // best effort only
       }
-    } catch {
-      // fall through to seed
+      if (key === KEY) continue;
+      break;
     }
-    try {
-      storage.setItem(`${KEY}:broken`, raw);
-    } catch {
-      // best effort only
+
+    const books = assignNumbers(list.map(normalizeBook).filter(Boolean), seed);
+    if (books.length || list.length === 0) {
+      if (key === LEGACY_KEY) saveBooks(storage, books);
+      return { books, seeded: false };
     }
   }
 
@@ -74,17 +129,22 @@ export function loadBooks(storage, seed = []) {
       }),
     )
     .filter(Boolean);
+  assignNumbers(books, seed);
   saveBooks(storage, books);
   return { books, seeded: true };
 }
 
-export function addBook(books, value, { id = newId(), addedAt = Date.now() } = {}) {
-  return [...books, { id, ...value, addedAt }];
+export function addBook(books, value, { id = newId(), addedAt = Date.now(), number = null } = {}) {
+  const max = books.reduce((current, book) => Math.max(current, book.number ?? 0), 0);
+  const next = parseNumber(number) ?? max + 1;
+  return [...books, { id, ...value, number: next, addedAt }];
 }
 
 export function updateBook(books, id, value) {
   return books.map((book) =>
-    book.id === id ? { ...book, ...value, id: book.id, addedAt: book.addedAt } : book,
+    book.id === id
+      ? { ...book, ...value, id: book.id, number: book.number, addedAt: book.addedAt }
+      : book,
   );
 }
 
@@ -132,7 +192,7 @@ export function fromExport(data) {
       return { ...book, id: newId() };
     });
 
-  const books = dedupeBooks(normalized);
+  const books = assignNumbers(dedupeBooks(normalized), []);
   if (!books.length) throw new Error("В файле нет книг с названиями");
   return { books, skipped: list.length - books.length };
 }

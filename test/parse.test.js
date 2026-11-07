@@ -16,7 +16,7 @@ test("название без автора сохраняется целиком
   assert.deepEqual(parseEntry("Рандеву в лифте"), {
     title: "Рандеву в лифте",
     author: "",
-    format: "unknown",
+    format: "book",
     year: null,
   });
 });
@@ -49,11 +49,11 @@ test("несколько авторов сохраняются как одна �
   assert.equal(entry.author, "Александр Островский, Николай Соловьев");
 });
 
-test("«книга с работы» — бумажный формат, пометка убирается", () => {
+test("«книга с работы» — обычная книга, пометка убирается", () => {
   assert.deepEqual(parseEntry("Лето - Алла Горбунова (книга с работы)"), {
     title: "Лето",
     author: "Алла Горбунова",
-    format: "paper",
+    format: "book",
     year: null,
   });
 });
@@ -86,7 +86,7 @@ test("dedupeEntries убирает повторы по названию и ав�
   const entries = [
     { title: "Гарри Поттер и Философский камень", author: "Джоан Роулинг", format: "audio", year: null },
     { title: "Гарри Поттер и философский камень", author: "джоан роулинг", format: "audio", year: 2018 },
-    { title: "Другая", author: "", format: "unknown", year: null },
+    { title: "Другая", author: "", format: "book", year: null },
   ];
   const result = dedupeEntries(entries);
   assert.equal(result.length, 2);

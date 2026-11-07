@@ -1,16 +1,14 @@
-export const FORMATS = ["audio", "paper", "ebook", "unknown"];
+export const FORMATS = ["audio", "book"];
 
 const FORMAT_LABELS = {
   audio: "Аудио",
-  paper: "Бумага",
-  ebook: "Электронная",
-  unknown: "Не указан",
+  book: "Книга",
 };
 
 const collator = new Intl.Collator("ru", { sensitivity: "base", numeric: true });
 
 export function formatLabel(format) {
-  return FORMAT_LABELS[format] ?? FORMAT_LABELS.unknown;
+  return FORMAT_LABELS[format] ?? FORMAT_LABELS.book;
 }
 
 export function normalizeSearch(value) {
@@ -78,6 +76,34 @@ export function groupBooks(sortedBooks) {
   return groups;
 }
 
+export function groupBooksByYear(books) {
+  const byYear = new Map();
+  for (const book of books) {
+    const year = book.year ?? null;
+    if (!byYear.has(year)) byYear.set(year, []);
+    byYear.get(year).push(book);
+  }
+
+  const years = [...byYear.keys()].sort((a, b) => {
+    if (a === null) return 1;
+    if (b === null) return -1;
+    return b - a;
+  });
+
+  return years.map((year) => {
+    const group = byYear.get(year);
+    const books =
+      year === null
+        ? sortBooks(group, "title")
+        : [...group].sort(
+            (a, b) =>
+              (a.number ?? Number.MAX_SAFE_INTEGER) - (b.number ?? Number.MAX_SAFE_INTEGER) ||
+              collator.compare(a.title, b.title),
+          );
+    return { year, label: year === null ? "Без года" : String(year), books };
+  });
+}
+
 export function pluralBooks(count) {
   const abs = Math.abs(Number(count) || 0);
   const lastTwo = abs % 100;
@@ -94,7 +120,7 @@ export function bookKey(book) {
 
 function mergeMissing(target, source) {
   if (!target.year && source.year) target.year = source.year;
-  if (target.format === "unknown" && source.format !== "unknown") target.format = source.format;
+  if (target.format !== "audio" && source.format === "audio") target.format = "audio";
   if (!target.author && source.author) target.author = source.author;
 }
 
@@ -138,8 +164,8 @@ export function validateBookInput(input = {}, { books = [], excludeId = null } =
   const errors = {};
   const title = normalizeSpaces(input.title);
   const author = normalizeSpaces(input.author);
-  const rawFormat = input.format ?? "unknown";
-  const format = FORMATS.includes(rawFormat) ? rawFormat : "unknown";
+  const rawFormat = input.format || "book";
+  const format = FORMATS.includes(rawFormat) ? rawFormat : "book";
   const rawYear = input.year;
   let year = null;
 

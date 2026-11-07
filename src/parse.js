@@ -3,7 +3,6 @@ import { dedupeBooks, normalizeSearch } from "./domain.js";
 const HEADER_RE = /^прочитанные книги:?$/i;
 const MARKER_RE = /\s*\((?:аудио\s*книга|книга с работы)\)/gi;
 const AUDIO_RE = /\(аудио\s*книга\)/i;
-const PAPER_RE = /\(книга с работы\)/i;
 const YEAR_RE = /(?:^|\s)(20\d{2})\s*(?:год|г\.?)\s*$/i;
 const SEPARATOR_RE = /(?:\s+[-–—]\s*|\s*[-–—]\s+)/g;
 const AUTHOR_START_RE = /^[A-ZА-ЯЁ]/;
@@ -22,9 +21,7 @@ export function parseEntry(raw) {
   let text = clean(raw);
   if (!text || HEADER_RE.test(text)) return null;
 
-  let format = "unknown";
-  if (AUDIO_RE.test(text)) format = "audio";
-  else if (PAPER_RE.test(text)) format = "paper";
+  const format = AUDIO_RE.test(text) ? "audio" : "book";
 
   text = clean(text.replace(MARKER_RE, " "));
 

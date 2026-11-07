@@ -6,6 +6,7 @@ import {
   filterBooks,
   formatLabel,
   groupBooks,
+  groupBooksByYear,
   groupLetter,
   normalizeSearch,
   pluralBooks,
@@ -15,20 +16,18 @@ import {
 } from "../src/domain.js";
 
 const books = [
-  { id: "1", title: "Гарри Поттер и философский камень", author: "Джоан Роулинг", format: "audio", year: 2018, addedAt: 1 },
-  { id: "2", title: "Шипы чёрного ириса", author: "", format: "paper", year: null, addedAt: 2 },
-  { id: "3", title: "Ёлка", author: "Анна Иванова", format: "ebook", year: 2024, addedAt: 3 },
-  { id: "4", title: "451 градус по Фаренгейту", author: "Рэй Брэдбери", format: "audio", year: 2021, addedAt: 4 },
-  { id: "5", title: "Апельсин", author: "Джоан Роулинг", format: "unknown", year: null, addedAt: 5 },
-  { id: "6", title: "Мёртвая зона", author: "", format: "unknown", year: null, addedAt: 6 },
+  { id: "1", number: 10, title: "Гарри Поттер и философский камень", author: "Джоан Роулинг", format: "audio", year: 2018, addedAt: 1 },
+  { id: "2", number: 20, title: "Шипы чёрного ириса", author: "", format: "book", year: null, addedAt: 2 },
+  { id: "3", number: 30, title: "Ёлка", author: "Анна Иванова", format: "book", year: 2024, addedAt: 3 },
+  { id: "4", number: 40, title: "451 градус по Фаренгейту", author: "Рэй Брэдбери", format: "audio", year: 2021, addedAt: 4 },
+  { id: "5", number: 50, title: "Апельсин", author: "Джоан Роулинг", format: "book", year: null, addedAt: 5 },
+  { id: "6", number: 60, title: "Мёртвая зона", author: "", format: "book", year: null, addedAt: 6 },
 ];
 
-test("FORMATS содержит только известные форматы", () => {
-  assert.deepEqual(FORMATS, ["audio", "paper", "ebook", "unknown"]);
+test("FORMATS содержит только аудио и книгу", () => {
+  assert.deepEqual(FORMATS, ["audio", "book"]);
   assert.equal(formatLabel("audio"), "Аудио");
-  assert.equal(formatLabel("paper"), "Бумага");
-  assert.equal(formatLabel("ebook"), "Электронная");
-  assert.equal(formatLabel("unknown"), "Не указан");
+  assert.equal(formatLabel("book"), "Книга");
 });
 
 test("normalizeSearch приводит регистр, ё и лишние пробелы", () => {
@@ -57,6 +56,7 @@ test("пустой запрос возвращает все книги", () => {
 test("фильтр по формату работает вместе с поиском", () => {
   assert.deepEqual(filterBooks(books, { query: "", format: "audio" }).map((b) => b.id), ["1", "4"]);
   assert.deepEqual(filterBooks(books, { query: "роулинг", format: "audio" }).map((b) => b.id), ["1"]);
+  assert.deepEqual(filterBooks(books, { query: "", format: "book" }).map((b) => b.id), ["2", "3", "5", "6"]);
 });
 
 test("сортировка по названию использует русский алфавит и числа", () => {
@@ -71,7 +71,7 @@ test("сортировка по названию использует русск
 });
 
 test("сортировка «сначала новые» ставит недавние книги вперёд", () => {
-  const extra = { id: "7", title: "Новая", author: "", format: "unknown", year: null, addedAt: 999 };
+  const extra = { id: "7", title: "Новая", author: "", format: "book", year: null, addedAt: 999 };
   assert.deepEqual(sortBooks([...books, extra], "new").map((b) => b.id)[0], "7");
 });
 
@@ -83,6 +83,28 @@ test("группировка по первой букве", () => {
   const groups = groupBooks(sortBooks(books, "title"));
   assert.deepEqual(groups.map((g) => g.letter), ["#", "А", "Г", "Ё", "М", "Ш"]);
   assert.equal(groups.reduce((sum, g) => sum + g.books.length, 0), books.length);
+});
+
+test("группировка по годам: годы по убыванию, «Без года» в конце", () => {
+  const groups = groupBooksByYear(books);
+  assert.deepEqual(groups.map((g) => g.label), ["2024", "2021", "2018", "Без года"]);
+  assert.deepEqual(groups[0].books.map((b) => b.title), ["Ёлка"]);
+  assert.deepEqual(groups[1].books.map((b) => b.title), ["451 градус по Фаренгейту"]);
+  assert.equal(groups.at(-1).books.length, 3);
+  assert.equal(groups.reduce((sum, g) => sum + g.books.length, 0), books.length);
+});
+
+test("внутри года книги идут по номерам docx, без года — по алфавиту", () => {
+  const rows = [
+    { id: "1", number: 20, title: "Яблоко", author: "", format: "book", year: 2024, addedAt: 1 },
+    { id: "2", number: 10, title: "Айва", author: "", format: "book", year: 2024, addedAt: 2 },
+    { id: "3", number: 5, title: "Бета", author: "", format: "book", year: null, addedAt: 3 },
+    { id: "4", number: 1, title: "Альфа", author: "", format: "book", year: null, addedAt: 4 },
+  ];
+  const groups = groupBooksByYear(rows);
+  assert.deepEqual(groups.map((g) => g.label), ["2024", "Без года"]);
+  assert.deepEqual(groups[0].books.map((b) => b.number), [10, 20]);
+  assert.deepEqual(groups[1].books.map((b) => b.title), ["Альфа", "Бета"]);
 });
 
 test("склонение количества книг", () => {
@@ -101,7 +123,7 @@ test("валидация: название обязательно и обрез�
   assert.equal(result.ok, true);
   assert.equal(result.value.title, "Книга");
   assert.equal(result.value.author, "");
-  assert.equal(result.value.format, "unknown");
+  assert.equal(result.value.format, "book");
   assert.equal(result.value.year, null);
 
   const empty = validateBookInput({ title: "   " }, { books });
@@ -140,9 +162,9 @@ test("валидация: формат проверяется", () => {
 
 test("dedupeBooks убирает повторы без учёта регистра и добирает недостающие данные", () => {
   const input = [
-    { id: "a", title: "Гарри Поттер", author: "Джоан Роулинг", format: "unknown", year: null, addedAt: 1 },
+    { id: "a", title: "Гарри Поттер", author: "Джоан Роулинг", format: "book", year: null, addedAt: 1 },
     { id: "b", title: "гарри поттер", author: "джоан роулинг", format: "audio", year: 2018, addedAt: 2 },
-    { id: "c", title: "Другая", author: "", format: "unknown", year: null, addedAt: 3 },
+    { id: "c", title: "Другая", author: "", format: "book", year: null, addedAt: 3 },
   ];
   const result = dedupeBooks(input);
   assert.equal(result.length, 2);
@@ -152,7 +174,7 @@ test("dedupeBooks убирает повторы без учёта регистр
 
 test("dedupeBooks склеивает длинный дубль без автора, но не короткие названия", () => {
   const input = [
-    { id: "a", title: "Гарри Поттер и проклятое дитя", author: "", format: "unknown", year: null, addedAt: 1 },
+    { id: "a", title: "Гарри Поттер и проклятое дитя", author: "", format: "book", year: null, addedAt: 1 },
     {
       id: "b",
       title: "Гарри Поттер и проклятое дитя",
@@ -161,7 +183,7 @@ test("dedupeBooks склеивает длинный дубль без автор
       year: null,
       addedAt: 2,
     },
-    { id: "c", title: "Маскарад", author: "", format: "unknown", year: null, addedAt: 3 },
+    { id: "c", title: "Маскарад", author: "", format: "book", year: null, addedAt: 3 },
     { id: "d", title: "Маскарад", author: "Александр Дюма", format: "audio", year: null, addedAt: 4 },
   ];
   const result = dedupeBooks(input);

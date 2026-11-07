@@ -1,4 +1,7 @@
-"""Извлекает текст из docx в tools/raw-lines.json (по одной строке на запись).
+"""Извлекает нумерованный список книг из docx в tools/raw-lines.json.
+
+Каждая запись — {"number": 1..765, "text": "..."}. Номер соответствует
+видимому номеру пункта в документе (нумерация идёт одним списком).
 
 Использование:
     python tools/extract_docx.py "C:\\Users\\user\\Desktop\\Книги.docx"
@@ -20,12 +23,21 @@ def main() -> int:
         return 1
 
     document = Document(source)
-    lines = [p.text.replace("\ufeff", " ").strip() for p in document.paragraphs]
-    lines = [line for line in lines if line]
+    entries: list[dict[str, object]] = []
+    number = 0
+
+    for paragraph in document.paragraphs:
+        text = paragraph.text.replace("\ufeff", " ").strip()
+        if not text:
+            continue
+        if text.rstrip(":").strip().lower() == "прочитанные книги":
+            continue
+        number += 1
+        entries.append({"number": number, "text": text})
 
     target = Path(__file__).with_name("raw-lines.json")
-    target.write_text(json.dumps(lines, ensure_ascii=False, indent=0), encoding="utf-8")
-    print(f"Извлечено строк: {len(lines)} -> {target}")
+    target.write_text(json.dumps(entries, ensure_ascii=False, indent=0), encoding="utf-8")
+    print(f"Извлечено записей: {len(entries)}, номера 1..{number} -> {target}")
     return 0
 
 
