@@ -474,6 +474,27 @@ button {
   text-transform: uppercase;
 }
 
+.year-end {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 20px 7px;
+  background: var(--bg);
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.year-end::before,
+.year-end::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+}
+
 .book {
   display: flex;
   align-items: center;
@@ -941,6 +962,101 @@ button {
 
   .hero h1 {
     font-size: 46px;
+  }
+}
+
+.print-doc {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 16mm 15mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  body > :not(.print-doc) {
+    display: none !important;
+  }
+
+  .print-doc {
+    display: block;
+    color: #000;
+    font-family: "Times New Roman", Georgia, serif;
+  }
+
+  .print-title {
+    margin: 0 0 2mm;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 26pt;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+
+  .print-meta {
+    margin: 0 0 7mm;
+    color: #555;
+    font-family: Arial, sans-serif;
+    font-size: 8.5pt;
+  }
+
+  .print-year {
+    margin: 7mm 0 2mm;
+    padding-bottom: 1mm;
+    border-bottom: 0.5pt solid #999;
+    font-family: Arial, sans-serif;
+    font-size: 13pt;
+    letter-spacing: 0.08em;
+    break-after: avoid;
+  }
+
+  .print-entry {
+    display: flex;
+    gap: 2mm;
+    margin: 0 0 1.2mm;
+    font-size: 10pt;
+    line-height: 1.35;
+    break-inside: avoid;
+  }
+
+  .print-number {
+    flex: none;
+    width: 8mm;
+    color: #555;
+    font-family: Arial, sans-serif;
+    font-size: 8.5pt;
+    text-align: right;
+  }
+
+  .print-body {
+    flex: 1;
+  }
+
+  .print-book-title {
+    font-weight: 600;
+  }
+
+  .print-format {
+    color: #555;
+    font-family: Arial, sans-serif;
+    font-size: 9pt;
+  }
+
+  .print-year-end {
+    margin: 1mm 0 4mm;
+    color: #666;
+    font-family: Arial, sans-serif;
+    font-size: 8pt;
+    letter-spacing: 0.08em;
+    text-align: right;
+    text-transform: uppercase;
+    break-before: avoid;
   }
 }
 

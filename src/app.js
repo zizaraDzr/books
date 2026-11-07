@@ -3,7 +3,7 @@ import {
   filterBooks,
   formatLabel,
   groupBooks,
-  groupBooksByYear,
+  groupBooksByPeriod,
   pluralBooks,
   sortBooks,
   validateBookInput,
@@ -47,6 +47,7 @@ const els = {
   addButton: $("#add-button"),
   menuButton: $("#menu-button"),
   menu: $("#menu"),
+  pdfButton: $("#pdf-button"),
   exportButton: $("#export-button"),
   importButton: $("#import-button"),
   importFile: $("#import-file"),
@@ -67,6 +68,7 @@ const els = {
   toast: $("#toast"),
   toastText: $("#toast-text"),
   toastAction: $("#toast-action"),
+  printDoc: $("#print-doc"),
 };
 
 const storage = (() => {
@@ -83,7 +85,7 @@ const state = {
   books: stored.books,
   query: "",
   format: "all",
-  sort: "year",
+  sort: "order",
   editingId: null,
   deleteArmed: false,
   snapshot: "",
@@ -169,7 +171,7 @@ function createBookRow(book, { showYear = true } = {}) {
   return row;
 }
 
-function appendGroup(fragment, label, ariaLabel, books, { showYear = true } = {}) {
+function appendGroup(fragment, label, ariaLabel, books, { showYear = true, endLabel = "" } = {}) {
   const section = document.createElement("section");
   section.className = "group";
   const heading = document.createElement("h2");
@@ -178,12 +180,20 @@ function appendGroup(fragment, label, ariaLabel, books, { showYear = true } = {}
   heading.setAttribute("aria-label", ariaLabel);
   section.append(heading);
   for (const book of books) section.append(createBookRow(book, { showYear }));
+  if (endLabel) {
+    const end = document.createElement("div");
+    end.className = "year-end";
+    end.textContent = endLabel;
+    end.setAttribute("aria-hidden", "true");
+    section.append(end);
+  }
   fragment.append(section);
 }
 
 function renderList() {
   const filtered = filterBooks(state.books, { query: state.query, format: state.format });
   const isEmpty = filtered.length === 0;
+  const filtersActive = state.query.trim() !== "" || state.format !== "all";
 
   els.list.replaceChildren();
   els.list.hidden = isEmpty;
@@ -191,15 +201,19 @@ function renderList() {
 
   if (!isEmpty) {
     const fragment = document.createDocumentFragment();
-    if (state.sort === "year") {
-      for (const group of groupBooksByYear(filtered)) {
+    if (state.sort === "order" && !filtersActive) {
+      for (const group of groupBooksByPeriod(filtered)) {
         appendGroup(
           fragment,
           group.label,
-          group.year === null ? "Без года" : `${group.year} год`,
+          group.year === null ? group.label : `${group.year} год`,
           group.books,
-          { showYear: false },
+          { showYear: false, endLabel: group.showEnd ? group.label : "" },
         );
+      }
+    } else if (state.sort === "order") {
+      for (const book of sortBooks(filtered, "order")) {
+        fragment.append(createBookRow(book));
       }
     } else {
       const sorted = sortBooks(filtered, state.sort);
@@ -221,7 +235,6 @@ function renderList() {
     els.emptyAction.textContent = isLibraryEmpty ? "Добавить книгу" : "Сбросить фильтры";
   }
 
-  const filtersActive = state.query.trim() !== "" || state.format !== "all";
   els.resultBar.hidden = !filtersActive;
   if (filtersActive) {
     els.resultText.textContent = `Найдено: ${filtered.length} из ${state.books.length}`;
@@ -357,15 +370,12 @@ function requestClose() {
 
 function onSubmit(event) {
   event.preventDefault();
-  const result = validateBookInput(
-    {
-      title: els.title.value,
-      author: els.author.value,
-      year: els.year.value,
-      format: checkedFormat(),
-    },
-    { books: state.books, excludeId: state.editingId },
-  );
+  const result = validateBookInput({
+    title: els.title.value,
+    author: els.author.value,
+    year: els.year.value,
+    format: checkedFormat(),
+  });
 
   if (!result.ok) {
     showErrors(result.errors);
@@ -504,11 +514,86 @@ async function exportBooks() {
   showToast("Файл сохранён");
 }
 
+function renderPrintDoc() {
+  const doc = els.printDoc;
+  doc.replaceChildren();
+
+  const title = document.createElement("h1");
+  title.className = "print-title";
+  title.textContent = "Прочитано";
+
+  const audio = state.books.filter((book) => book.format === "audio").length;
+  const meta = document.createElement("p");
+  meta.className = "print-meta";
+  meta.textContent = `${state.books.length} ${pluralBooks(state.books.length)} · ${audio} аудио · ${new Date().toLocaleDateString("ru-RU")}`;
+
+  doc.append(title, meta);
+
+  for (const group of groupBooksByPeriod(state.books)) {
+    const heading = document.createElement("h2");
+    heading.className = "print-year";
+    heading.textContent = group.label;
+    doc.append(heading);
+
+    for (const book of group.books) {
+      const entry = document.createElement("p");
+      entry.className = "print-entry";
+
+      const number = document.createElement("span");
+      number.className = "print-number";
+      number.textContent = `${book.number}.`;
+
+      const body = document.createElement("span");
+      body.className = "print-body";
+
+      const name = document.createElement("span");
+      name.className = "print-book-title";
+      name.textContent = book.title;
+
+      body.append(name);
+      if (book.author) body.append(document.createTextNode(` — ${book.author}`));
+      if (book.format === "audio") {
+        const format = document.createElement("span");
+        format.className = "print-format";
+        format.textContent = " · аудио";
+        body.append(format);
+      }
+      entry.append(number, body);
+      doc.append(entry);
+    }
+
+    if (group.showEnd) {
+      const end = document.createElement("div");
+      end.className = "print-year-end";
+      end.textContent = group.label;
+      doc.append(end);
+    }
+  }
+}
+
+function exportPdf() {
+  setMenuOpen(false);
+  renderPrintDoc();
+
+  const cleanup = () => {
+    els.printDoc.replaceChildren();
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+
+  try {
+    window.print();
+  } catch {
+    cleanup();
+    showToast("Не удалось открыть печать");
+  }
+}
+
 async function importBooks(file) {
   setMenuOpen(false);
   try {
     const text = await file.text();
-    const { books, skipped } = fromExport(JSON.parse(text));
+    const { books, skipped } = fromExport(JSON.parse(text), SEED);
     const ok = window.confirm(
       `Импортировать ${books.length} ${pluralBooks(books.length)}? Текущий список (${state.books.length}) будет заменён.`,
     );
@@ -621,6 +706,7 @@ els.year.addEventListener("input", () => setError("year", ""));
 els.formatGroup.addEventListener("change", () => setError("format", ""));
 
 els.menuButton.addEventListener("click", () => setMenuOpen(els.menu.hidden));
+els.pdfButton.addEventListener("click", exportPdf);
 els.exportButton.addEventListener("click", exportBooks);
 els.importButton.addEventListener("click", () => {
   setMenuOpen(false);

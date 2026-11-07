@@ -42,8 +42,13 @@
                 </svg>
               </button>
               <div class="menu" id="menu" hidden>
-                <button class="menu-item" id="export-button" type="button">Экспорт списка</button>
+                <button class="menu-item" id="pdf-button" type="button">Экспорт в PDF</button>
+                <button class="menu-item" id="export-button" type="button">Резервная копия JSON</button>
                 <button class="menu-item" id="import-button" type="button">Импорт списка</button>
+                <p class="menu-hint">
+                  <strong>PDF</strong>
+                  В диалоге печати выберите «Сохранить в файлы»
+                </p>
                 <p class="menu-hint">
                   <strong>Установка на iPhone</strong>
                   Safari → «Поделиться» → «На экран „Домой“»
@@ -56,7 +61,7 @@
             <p class="hero-count"><span id="total-count">…</span><span id="audio-count"></span></p>
             <div class="sort-wrap">
               <select id="sort" aria-label="Сортировка">
-                <option value="year">По годам</option>
+                <option value="order">По порядку</option>
                 <option value="title">А–Я</option>
                 <option value="new">Новые</option>
               </select>
@@ -209,6 +214,8 @@
       <span id="toast-text"></span>
       <button class="toast-action" id="toast-action" type="button" hidden></button>
     </div>
+
+    <section class="print-doc" id="print-doc" aria-hidden="true"></section>
 
     <input type="file" id="import-file" accept="application/json,.json" hidden />
 
