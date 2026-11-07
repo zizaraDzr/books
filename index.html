@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Прочитано</title>
+    <meta name="description" content="Личный список прочитанных книг: поиск, добавление и редактирование. Работает офлайн." />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f6f1e7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#121512" media="(prefers-color-scheme: dark)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Прочитано" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="statusbar-fill" aria-hidden="true"></div>
+
+    <div class="page" id="page">
+      <header class="hero">
+        <div class="hero-inner">
+          <div class="hero-top">
+            <p class="eyebrow">Моя библиотека</p>
+            <div class="menu-wrap">
+              <button
+                class="icon-button"
+                id="menu-button"
+                type="button"
+                aria-label="Меню"
+                aria-haspopup="true"
+                aria-expanded="false"
+                aria-controls="menu"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <circle cx="5" cy="12" r="1.6" fill="currentColor" />
+                  <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+                  <circle cx="19" cy="12" r="1.6" fill="currentColor" />
+                </svg>
+              </button>
+              <div class="menu" id="menu" hidden>
+                <button class="menu-item" id="export-button" type="button">Экспорт списка</button>
+                <button class="menu-item" id="import-button" type="button">Импорт списка</button>
+                <p class="menu-hint">
+                  <strong>Установка на iPhone</strong>
+                  Safari → «Поделиться» → «На экран „Домой“»
+                </p>
+              </div>
+            </div>
+          </div>
+          <h1>Прочитано</h1>
+          <div class="hero-meta">
+            <p class="hero-count"><span id="total-count">…</span><span id="audio-count"></span></p>
+            <div class="sort-wrap">
+              <select id="sort" aria-label="Сортировка">
+                <option value="title">А–Я</option>
+                <option value="new">Новые</option>
+              </select>
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="m7 10 5 5 5-5" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="toolbar" id="toolbar">
+        <div class="toolbar-inner">
+          <div class="search-field">
+            <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              id="search"
+              type="search"
+              placeholder="Название или автор"
+              aria-label="Поиск по названию или автору"
+              autocomplete="off"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              enterkeyhint="search"
+            />
+            <button class="clear-button" id="clear-search" type="button" aria-label="Очистить поиск" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="filters-row">
+            <div class="chips" id="format-chips" role="group" aria-label="Фильтр по формату">
+              <button class="chip is-active" type="button" data-format="all" aria-pressed="true">Все</button>
+              <button class="chip" type="button" data-format="audio" aria-pressed="false">Аудио</button>
+              <button class="chip" type="button" data-format="paper" aria-pressed="false">Бумага</button>
+              <button class="chip" type="button" data-format="ebook" aria-pressed="false">Электронные</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <main class="content">
+        <div class="result-bar" id="result-bar" hidden>
+          <p id="result-text"></p>
+          <button class="link-button" id="reset-filters" type="button">Сбросить</button>
+        </div>
+
+        <div class="book-list" id="book-list"></div>
+
+        <div class="empty" id="empty" hidden>
+          <div class="empty-art" aria-hidden="true">
+            <svg viewBox="0 0 48 48">
+              <path d="M8 11.5A3.5 3.5 0 0 1 11.5 8H40v29H11.5A3.5 3.5 0 0 1 8 33.5z" />
+              <path d="M8 33.5A3.5 3.5 0 0 1 11.5 30H40" />
+              <path d="M16 16h15M16 22h11" />
+            </svg>
+          </div>
+          <h2 id="empty-title">Список пуст</h2>
+          <p id="empty-text">Добавьте первую книгу — она сохранится на этом устройстве.</p>
+          <button class="primary-button compact" id="empty-action" type="button">Добавить книгу</button>
+        </div>
+      </main>
+
+      <button class="fab" id="add-button" type="button" aria-label="Добавить книгу">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="sheet-layer" id="sheet-layer" hidden>
+      <div class="sheet-backdrop" data-close-sheet></div>
+      <section class="sheet" id="editor" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="sheet-head">
+          <h2 id="sheet-title">Новая книга</h2>
+          <button class="icon-button" id="close-sheet" type="button" aria-label="Закрыть">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="sheet-scroll">
+          <form id="book-form" novalidate>
+            <div class="field">
+              <label for="book-title">Название</label>
+              <input
+                id="book-title"
+                name="title"
+                type="text"
+                maxlength="300"
+                autocomplete="off"
+                enterkeyhint="next"
+                required
+              />
+              <p class="field-error" id="title-error" role="alert"></p>
+            </div>
+
+            <div class="field">
+              <label for="book-author">Автор</label>
+              <input id="book-author" name="author" type="text" maxlength="200" autocomplete="off" enterkeyhint="next" />
+            </div>
+
+            <fieldset class="field">
+              <legend>Формат</legend>
+              <div class="segmented" id="format-group">
+                <label class="segment">
+                  <input type="radio" name="format" value="unknown" checked />
+                  <span>Не указан</span>
+                </label>
+                <label class="segment">
+                  <input type="radio" name="format" value="audio" />
+                  <span>Аудио</span>
+                </label>
+                <label class="segment">
+                  <input type="radio" name="format" value="paper" />
+                  <span>Бумага</span>
+                </label>
+                <label class="segment">
+                  <input type="radio" name="format" value="ebook" />
+                  <span>Электронная</span>
+                </label>
+              </div>
+              <p class="field-error" id="format-error" role="alert"></p>
+            </fieldset>
+
+            <div class="field">
+              <label for="book-year">Год прочтения</label>
+              <input
+                id="book-year"
+                name="year"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                maxlength="4"
+                placeholder="Необязательно"
+                autocomplete="off"
+              />
+              <p class="field-error" id="year-error" role="alert"></p>
+            </div>
+
+            <div class="sheet-actions">
+              <button class="primary-button" id="save-button" type="submit">Добавить</button>
+              <button class="danger-button" id="delete-button" type="button" hidden>Удалить книгу</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+      <span id="toast-text"></span>
+      <button class="toast-action" id="toast-action" type="button" hidden></button>
+    </div>
+
+    <input type="file" id="import-file" accept="application/json,.json" hidden />
+
+    <script type="module" src="src/app.js"></script>
+  </body>
+</html>
