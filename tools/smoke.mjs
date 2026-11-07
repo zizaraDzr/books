@@ -25,10 +25,15 @@ await rm(profile, { recursive: true, force: true });
 await mkdir(profile, { recursive: true });
 await mkdir(screenshots, { recursive: true });
 
-const server = createStaticServer(root);
-await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-const port = server.address().port;
-const base = `http://127.0.0.1:${port}/`;
+let server = null;
+let base = process.env.SMOKE_URL || process.argv[2] || "";
+if (base) {
+  if (!base.endsWith("/")) base += "/";
+} else {
+  server = createStaticServer(root);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  base = `http://127.0.0.1:${server.address().port}/`;
+}
 
 process.on("exit", () => {
   try {
@@ -414,5 +419,5 @@ console.log(`Скриншоты: ${screenshots}`);
 
 await Promise.race([send("Browser.close").catch(() => {}), sleep(1000)]);
 ws.close();
-server.close();
+server?.close();
 chrome.kill();

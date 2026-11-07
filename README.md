@@ -2,6 +2,8 @@
 
 Личный список прочитанных книг в виде PWA: открыть один раз в Safari на iPhone, добавить на экран «Домой» — дальше список работает офлайн и хранится на телефоне.
 
+**Живой сайт:** [zizaradzr.github.io/books](https://zizaradzr.github.io/books/)
+
 ![Главный экран](screenshots/home.png)
 
 ## Что умеет
@@ -39,23 +41,23 @@ npm run smoke
 
 Скрипт запускает headless Chrome, проверяет поиск, фильтр, добавление, редактирование, удаление, отмену, перезагрузку и офлайн-режим, а также делает скриншоты в `screenshots/`. Нужен установленный Chrome; при нестандартном пути задайте `CHROME_PATH`.
 
-## Публикация на GitHub Pages
-
-Репозиторий уже привязан:
+Проверка именно опубликованной версии:
 
 ```bash
-git remote -v
-# origin  https://github.com/zizaraDzr/books.git
+SMOKE_URL=https://zizaradzr.github.io/books/ npm run smoke
 ```
 
-1. Отправьте `main`:
-   ```bash
-   git push -u origin main
-   ```
-2. На GitHub: **Settings → Pages → Build and deployment**.
-3. Source: **Deploy from a branch**, Branch: **main**, folder: **/ (root)**, Save.
-4. Через минуту сайт будет доступен по адресу:
-   `https://zizaradzr.github.io/books/`
+В PowerShell:
+
+```powershell
+$env:SMOKE_URL='https://zizaradzr.github.io/books/'; npm run smoke
+```
+
+## Публикация на GitHub Pages
+
+Сайт уже опубликован: [zizaradzr.github.io/books](https://zizaradzr.github.io/books/). Источник — ветка `main`, папка `/ (root)`. После изменений достаточно `git push`; GitHub Pages пересоберёт сайт автоматически.
+
+Если Pages когда-нибудь отключат: **Settings → Pages → Deploy from a branch → main / (root) → Save**.
 
 Все пути относительные, поэтому сайт работает и в подпапке `/books/`.
 
