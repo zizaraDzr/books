@@ -5,7 +5,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { filterBooks, pluralBooks, sortBooks } from "../src/domain.js";
+import { filterBooks, pluralBooks } from "../src/domain.js";
 import { SEED } from "../src/seed.js";
 import { createStaticServer } from "./server.mjs";
 
@@ -233,6 +233,11 @@ const yearMarks = await evaluate(`(() => {
   };
 })()`);
 assert.deepEqual(yearMarks, { endCount: 7, count2025: 2, count2018: 1, count2026: 1 });
+assert.deepEqual(
+  await evaluate('[...document.querySelectorAll("#sort option")].map((option) => option.value)'),
+  ["order", "new"],
+  "в сортировке остались только «По порядку» и «Новые»",
+);
 assert.equal(await text("#empty-title"), "Список пуст");
 
 const swState = await waitFor(async () => {
@@ -249,7 +254,7 @@ await screenshot("home.png");
 await evaluate(`(() => {
   const toolbarHeight = document.querySelector("#toolbar").getBoundingClientRect().height;
   const heading = [...document.querySelectorAll(".group-letter")].find((item) => item.textContent === "2025");
-  window.scrollTo(0, heading.getBoundingClientRect().top + window.scrollY - toolbarHeight - 24);
+  window.scrollTo(0, heading.getBoundingClientRect().top + window.scrollY - toolbarHeight + 220);
 })()`);
 await sleep(300);
 await screenshot("year-start.png");
@@ -262,42 +267,25 @@ await sleep(300);
 await screenshot("year-end.png");
 
 await evaluate(`(() => {
-  const select = document.querySelector("#sort");
-  select.value = "title";
-  select.dispatchEvent(new Event("change", { bubbles: true }));
-})()`);
-await waitFor(async () => (await count(".group-letter")) > 20, "алфавитные группы для проверки sticky");
-await evaluate(`(() => {
   const toolbarHeight = document.querySelector("#toolbar").getBoundingClientRect().height;
-  const header = [...document.querySelectorAll(".group-letter")].find((item) => item.textContent === "Г");
+  const header = [...document.querySelectorAll(".group-letter")].find((item) => item.textContent === "2025");
   const absoluteTop = header.getBoundingClientRect().top + window.scrollY;
-  window.scrollTo(0, absoluteTop - toolbarHeight + 40);
+  window.scrollTo(0, absoluteTop - toolbarHeight + 300);
 })()`);
 await sleep(350);
 const sticky = await evaluate(`(() => {
   const toolbar = document.querySelector("#toolbar").getBoundingClientRect();
-  const header = [...document.querySelectorAll(".group-letter")].find((item) => item.textContent === "Г");
+  const header = [...document.querySelectorAll(".group-letter")].find((item) => item.textContent === "2025");
   return { toolbarTop: toolbar.top, toolbarHeight: toolbar.height, headerTop: header.getBoundingClientRect().top };
 })()`);
 console.log("  sticky:", JSON.stringify(sticky));
 assert.ok(Math.abs(sticky.toolbarTop) < 1, "панель поиска прилипает к верху");
 assert.ok(
   Math.abs(sticky.headerTop - sticky.toolbarHeight) < 2,
-  `заголовок группы стоит под панелью (${sticky.headerTop} vs ${sticky.toolbarHeight})`,
+  `заголовок года стоит под панелью (${sticky.headerTop} vs ${sticky.toolbarHeight})`,
 );
 await screenshot("home-scrolled.png");
-
-await evaluate(`(() => {
-  const select = document.querySelector("#sort");
-  select.value = "order";
-  select.dispatchEvent(new Event("change", { bubbles: true }));
-  window.scrollTo(0, 0);
-})()`);
-await waitFor(
-  async () =>
-    (await evaluate('document.querySelector(".group-letter")?.textContent')) === "До 2018",
-  "возврат к хронологическому порядку",
-);
+await evaluate("window.scrollTo(0, 0)");
 
 const harry = filterBooks(SEED, { query: "гарри" }).length;
 await setInput("#search", "гарри");
@@ -319,24 +307,62 @@ assert.ok((await text("#result-text")).includes(`${regular} из ${expected}`));
 await click('[data-format="all"]');
 await waitFor(async () => (await count()) === expected, "сброс фильтра");
 
-const newest = sortBooks(SEED, "new")[0];
+const books2025 = filterBooks(SEED, { query: "2025" }).length;
+await setInput("#search", "2025");
+await waitFor(async () => (await count()) === books2025, "поиск по году 2025");
+assert.ok((await text("#result-text")).includes(`${books2025} из ${expected}`));
+assert.equal(
+  await evaluate(
+    '[...document.querySelectorAll(".book-meta")].every((element) => element.textContent.includes("2025"))',
+  ),
+  true,
+  "в результатах поиска по году только 2025",
+);
+const ruban2025 = filterBooks(SEED, { query: "2025 рубан" }).length;
+await setInput("#search", "2025 рубан");
+await waitFor(async () => (await count()) === ruban2025, "поиск по году и автору");
+assert.equal(
+  await evaluate('document.querySelector(".book-title")?.textContent'),
+  "Пробуждение",
+  "год комбинируется с автором",
+);
+await click("#clear-search");
+await waitFor(async () => (await count()) === expected, "очистка поиска по году");
+
 await evaluate(`(() => {
   const select = document.querySelector("#sort");
   select.value = "new";
   select.dispatchEvent(new Event("change", { bubbles: true }));
 })()`);
 await waitFor(
-  async () =>
-    (await evaluate('document.querySelector(".book .book-title")?.textContent')) === newest.title,
-  "сортировка «сначала новые»",
+  async () => (await evaluate('document.querySelector(".group-letter")?.textContent')) === "2026",
+  "сортировка «новые» с годами",
 );
-assert.equal(await count(".group-letter"), 0, "при сортировке «новые» нет буквенных групп");
+const newestGroups = await evaluate(`(() => {
+  return [...document.querySelectorAll(".group")].map((group) => ({
+    label: group.querySelector(".group-letter")?.textContent ?? "",
+    numbers: [...group.querySelectorAll(".book-number")].map((element) => element.textContent),
+  }));
+})()`);
+assert.deepEqual(
+  newestGroups.map((group) => group.label),
+  ["2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "До 2018"],
+);
+assert.equal(newestGroups[0].numbers[0], "765", "в 2026 первая самая новая книга");
+assert.deepEqual(newestGroups[1].numbers.slice(0, 2), ["728", "727"], "внутри года новые сверху");
+assert.equal(await count(".year-end"), 0, "в «Новых» один заголовок года, без закрывающей метки");
+await screenshot("new.png");
+
 await evaluate(`(() => {
   const select = document.querySelector("#sort");
-  select.value = "title";
+  select.value = "order";
   select.dispatchEvent(new Event("change", { bubbles: true }));
 })()`);
-await waitFor(async () => (await count(".group-letter")) > 0, "возврат сортировки по алфавиту");
+await waitFor(
+  async () =>
+    (await evaluate('document.querySelector(".group-letter")?.textContent')) === "До 2018",
+  "возврат к хронологическому порядку",
+);
 
 await click("#menu-button");
 assert.equal(await evaluate('document.querySelector("#menu").hidden'), false, "меню открывается");
