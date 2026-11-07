@@ -3,6 +3,7 @@ import {
   filterBooks,
   formatLabel,
   groupBooks,
+  groupBooksByYear,
   pluralBooks,
   sortBooks,
   validateBookInput,
@@ -21,9 +22,7 @@ import {
 
 const ICONS = {
   audio: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="2"/><rect x="17" y="14" width="4" height="6" rx="2"/></svg>`,
-  paper: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v20H7.5A2.5 2.5 0 0 1 5 19.5z"/><path d="M5 19.5A2.5 2.5 0 0 1 7.5 17H20"/></svg>`,
-  ebook: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="2.5" width="14" height="19" rx="2"/><path d="M9 7h6M9 10.5h6"/></svg>`,
-  unknown: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 3h12v18l-6-4-6 4z"/></svg>`,
+  book: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v20H7.5A2.5 2.5 0 0 1 5 19.5z"/><path d="M5 19.5A2.5 2.5 0 0 1 7.5 17H20"/></svg>`,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -84,7 +83,7 @@ const state = {
   books: stored.books,
   query: "",
   format: "all",
-  sort: "title",
+  sort: "year",
   editingId: null,
   deleteArmed: false,
   snapshot: "",
@@ -96,7 +95,7 @@ let deleteTimer = 0;
 let toastTimer = 0;
 
 function checkedFormat() {
-  return els.form.querySelector('input[name="format"]:checked')?.value ?? "unknown";
+  return els.form.querySelector('input[name="format"]:checked')?.value ?? "book";
 }
 
 function formSnapshot() {
@@ -121,21 +120,32 @@ function updateHeader() {
   els.audioCount.textContent = audio ? ` · ${audio} аудио` : "";
 }
 
-function createBookRow(book) {
+function createBookRow(book, { showYear = true } = {}) {
   const row = document.createElement("button");
   row.type = "button";
   row.className = "book";
   row.dataset.id = book.id;
   row.setAttribute(
     "aria-label",
-    [book.title, book.author, book.year ? String(book.year) : "", formatLabel(book.format)]
+    [
+      book.number ? `Книга ${book.number}` : "Книга",
+      book.title,
+      book.author,
+      showYear && book.year ? String(book.year) : "",
+      formatLabel(book.format),
+    ]
       .filter(Boolean)
       .join(", ") + ". Изменить книгу",
   );
 
+  const number = document.createElement("span");
+  number.className = "book-number";
+  number.textContent = book.number ?? "—";
+  number.setAttribute("aria-hidden", "true");
+
   const icon = document.createElement("span");
   icon.className = `book-icon is-${book.format}`;
-  icon.innerHTML = ICONS[book.format] ?? ICONS.unknown;
+  icon.innerHTML = ICONS[book.format] ?? ICONS.book;
 
   const text = document.createElement("span");
   text.className = "book-text";
@@ -147,7 +157,7 @@ function createBookRow(book) {
 
   const metaParts = [];
   if (book.author) metaParts.push(book.author);
-  if (book.year) metaParts.push(String(book.year));
+  if (showYear && book.year) metaParts.push(String(book.year));
   if (metaParts.length) {
     const meta = document.createElement("span");
     meta.className = "book-meta";
@@ -155,34 +165,51 @@ function createBookRow(book) {
     text.append(meta);
   }
 
-  row.append(icon, text);
+  row.append(number, icon, text);
   return row;
+}
+
+function appendGroup(fragment, label, ariaLabel, books, { showYear = true } = {}) {
+  const section = document.createElement("section");
+  section.className = "group";
+  const heading = document.createElement("h2");
+  heading.className = "group-letter";
+  heading.textContent = label;
+  heading.setAttribute("aria-label", ariaLabel);
+  section.append(heading);
+  for (const book of books) section.append(createBookRow(book, { showYear }));
+  fragment.append(section);
 }
 
 function renderList() {
   const filtered = filterBooks(state.books, { query: state.query, format: state.format });
-  const sorted = sortBooks(filtered, state.sort);
+  const isEmpty = filtered.length === 0;
 
   els.list.replaceChildren();
-  els.list.hidden = sorted.length === 0;
-  els.empty.hidden = sorted.length !== 0;
+  els.list.hidden = isEmpty;
+  els.empty.hidden = !isEmpty;
 
-  if (sorted.length) {
+  if (!isEmpty) {
     const fragment = document.createDocumentFragment();
-    if (state.sort === "title") {
-      for (const group of groupBooks(sorted)) {
-        const section = document.createElement("section");
-        section.className = "group";
-        const heading = document.createElement("h2");
-        heading.className = "group-letter";
-        heading.textContent = group.letter;
-        heading.setAttribute("aria-label", `Буква ${group.letter}`);
-        section.append(heading);
-        for (const book of group.books) section.append(createBookRow(book));
-        fragment.append(section);
+    if (state.sort === "year") {
+      for (const group of groupBooksByYear(filtered)) {
+        appendGroup(
+          fragment,
+          group.label,
+          group.year === null ? "Без года" : `${group.year} год`,
+          group.books,
+          { showYear: false },
+        );
       }
     } else {
-      for (const book of sorted) fragment.append(createBookRow(book));
+      const sorted = sortBooks(filtered, state.sort);
+      if (state.sort === "title") {
+        for (const group of groupBooks(sorted)) {
+          appendGroup(fragment, group.letter, `Буква ${group.letter}`, group.books);
+        }
+      } else {
+        for (const book of sorted) fragment.append(createBookRow(book));
+      }
     }
     els.list.append(fragment);
   } else {

@@ -16,12 +16,8 @@
   --accent-soft: #e1eadd;
   --audio: #a15431;
   --audio-soft: #f3e2d6;
-  --paper: #2e5a43;
-  --paper-soft: #e1eadd;
-  --ebook: #465c79;
-  --ebook-soft: #e3e7ef;
-  --unknown: #6f776d;
-  --unknown-soft: #eae5da;
+  --book: #2e5a43;
+  --book-soft: #e1eadd;
   --danger: #a13b2e;
   --danger-soft: #f6e3de;
   --shadow: 0 18px 42px rgba(37, 43, 33, 0.16);
@@ -44,12 +40,8 @@
     --accent-soft: #22352a;
     --audio: #e0a17c;
     --audio-soft: #38281f;
-    --paper: #9bc9ab;
-    --paper-soft: #22352a;
-    --ebook: #a9bedc;
-    --ebook-soft: #232d3a;
-    --unknown: #a3aa9e;
-    --unknown-soft: #272c25;
+    --book: #9bc9ab;
+    --book-soft: #22352a;
     --danger: #e58c7e;
     --danger-soft: #3a221d;
     --shadow: 0 18px 42px rgba(0, 0, 0, 0.45);
@@ -485,7 +477,7 @@ button {
 .book {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
   min-height: 70px;
   padding: 11px 20px;
@@ -500,6 +492,16 @@ button {
   background: var(--surface-2);
 }
 
+.book-number {
+  flex: none;
+  width: 30px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: right;
+}
+
 .book-icon {
   display: grid;
   flex: none;
@@ -507,23 +509,13 @@ button {
   height: 40px;
   place-items: center;
   border-radius: 50%;
-  background: var(--unknown-soft);
-  color: var(--unknown);
+  background: var(--book-soft);
+  color: var(--book);
 }
 
 .book-icon.is-audio {
   background: var(--audio-soft);
   color: var(--audio);
-}
-
-.book-icon.is-paper {
-  background: var(--paper-soft);
-  color: var(--paper);
-}
-
-.book-icon.is-ebook {
-  background: var(--ebook-soft);
-  color: var(--ebook);
 }
 
 .book-icon svg {

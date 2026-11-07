@@ -56,6 +56,7 @@
             <p class="hero-count"><span id="total-count">…</span><span id="audio-count"></span></p>
             <div class="sort-wrap">
               <select id="sort" aria-label="Сортировка">
+                <option value="year">По годам</option>
                 <option value="title">А–Я</option>
                 <option value="new">Новые</option>
               </select>
@@ -96,8 +97,7 @@
             <div class="chips" id="format-chips" role="group" aria-label="Фильтр по формату">
               <button class="chip is-active" type="button" data-format="all" aria-pressed="true">Все</button>
               <button class="chip" type="button" data-format="audio" aria-pressed="false">Аудио</button>
-              <button class="chip" type="button" data-format="paper" aria-pressed="false">Бумага</button>
-              <button class="chip" type="button" data-format="ebook" aria-pressed="false">Электронные</button>
+              <button class="chip" type="button" data-format="book" aria-pressed="false">Книги</button>
             </div>
           </div>
         </div>
@@ -170,20 +170,12 @@
               <legend>Формат</legend>
               <div class="segmented" id="format-group">
                 <label class="segment">
-                  <input type="radio" name="format" value="unknown" checked />
-                  <span>Не указан</span>
+                  <input type="radio" name="format" value="book" checked />
+                  <span>Книга</span>
                 </label>
                 <label class="segment">
                   <input type="radio" name="format" value="audio" />
                   <span>Аудио</span>
-                </label>
-                <label class="segment">
-                  <input type="radio" name="format" value="paper" />
-                  <span>Бумага</span>
-                </label>
-                <label class="segment">
-                  <input type="radio" name="format" value="ebook" />
-                  <span>Электронная</span>
                 </label>
               </div>
               <p class="field-error" id="format-error" role="alert"></p>
