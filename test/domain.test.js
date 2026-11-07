@@ -6,9 +6,8 @@ import {
   assignPeriodYears,
   filterBooks,
   formatLabel,
-  groupBooks,
   groupBooksByPeriod,
-  groupLetter,
+  groupBooksNewest,
   inferYearPeriods,
   normalizeSearch,
   pluralBooks,
@@ -45,6 +44,13 @@ test("поиск понимает ё как е", () => {
   assert.deepEqual(filterBooks(books, { query: "мертвая" }).map((b) => b.id), ["6"]);
 });
 
+test("поиск идёт по году и комбинируется с автором", () => {
+  assert.deepEqual(filterBooks(books, { query: "2024" }).map((b) => b.id), ["3"]);
+  assert.deepEqual(filterBooks(books, { query: "2018" }).map((b) => b.id), ["1"]);
+  assert.deepEqual(filterBooks(books, { query: "2021 брэдбери" }).map((b) => b.id), ["4"]);
+  assert.deepEqual(filterBooks(books, { query: "2021 роулинг" }).map((b) => b.id), []);
+});
+
 test("несколько слов в запросе ищутся одновременно", () => {
   assert.deepEqual(filterBooks(books, { query: "поттер роулинг" }).map((b) => b.id), ["1"]);
   assert.deepEqual(filterBooks(books, { query: "поттер брэдбери" }).map((b) => b.id), []);
@@ -60,17 +66,6 @@ test("фильтр по формату работает вместе с поис
   assert.deepEqual(filterBooks(books, { query: "", format: "book" }).map((b) => b.id), ["2", "3", "5", "6"]);
 });
 
-test("сортировка по названию использует русский алфавит и числа", () => {
-  assert.deepEqual(sortBooks(books, "title").map((b) => b.title), [
-    "451 градус по Фаренгейту",
-    "Апельсин",
-    "Гарри Поттер и философский камень",
-    "Ёлка",
-    "Мёртвая зона",
-    "Шипы чёрного ириса",
-  ]);
-});
-
 test("сортировка «сначала новые» ставит недавние книги вперёд", () => {
   const extra = { id: "7", title: "Новая", author: "", format: "book", year: null, addedAt: 999 };
   assert.deepEqual(sortBooks([...books, extra], "new").map((b) => b.id)[0], "7");
@@ -78,16 +73,6 @@ test("сортировка «сначала новые» ставит недав
 
 test("сортировка «по порядку» идёт по номерам docx", () => {
   assert.deepEqual(sortBooks([...books].reverse(), "order").map((b) => b.number), [10, 20, 30, 40, 50, 60]);
-});
-
-test("группировка по первой букве", () => {
-  assert.equal(groupLetter("«Сыщики»"), "С");
-  assert.equal(groupLetter("451 градус"), "#");
-  assert.equal(groupLetter("  harry potter"), "H");
-  assert.equal(groupLetter("Ёлка"), "Ё");
-  const groups = groupBooks(sortBooks(books, "title"));
-  assert.deepEqual(groups.map((g) => g.letter), ["#", "А", "Г", "Ё", "М", "Ш"]);
-  assert.equal(groups.reduce((sum, g) => sum + g.books.length, 0), books.length);
 });
 
 test("хронологическая группировка: год в начале и конце блока", () => {
@@ -139,6 +124,20 @@ test("периоды годов вычисляются по парным отм�
     2020,
     2020,
   ]);
+});
+
+test("«Новые»: годы по убыванию, внутри года новые сверху", () => {
+  const rows = [
+    { id: "a", number: 1, title: "А", author: "", format: "book", year: 2024, addedAt: 1 },
+    { id: "b", number: 2, title: "Б", author: "", format: "book", year: 2024, addedAt: 5 },
+    { id: "c", number: 3, title: "В", author: "", format: "book", year: 2025, addedAt: 2 },
+    { id: "d", number: 4, title: "Г", author: "", format: "book", year: null, addedAt: 9 },
+    { id: "e", number: 5, title: "Д", author: "", format: "book", year: null, addedAt: 3 },
+  ];
+  const groups = groupBooksNewest(rows);
+  assert.deepEqual(groups.map((group) => group.label), ["2025", "2024", "До 2018"]);
+  assert.deepEqual(groups[1].books.map((book) => book.id), ["b", "a"]);
+  assert.deepEqual(groups[2].books.map((book) => book.id), ["d", "e"]);
 });
 
 test("склонение количества книг", () => {

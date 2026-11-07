@@ -2,8 +2,8 @@ import { SEED } from "./seed.js";
 import {
   filterBooks,
   formatLabel,
-  groupBooks,
   groupBooksByPeriod,
+  groupBooksNewest,
   pluralBooks,
   sortBooks,
   validateBookInput,
@@ -216,13 +216,14 @@ function renderList() {
         fragment.append(createBookRow(book));
       }
     } else {
-      const sorted = sortBooks(filtered, state.sort);
-      if (state.sort === "title") {
-        for (const group of groupBooks(sorted)) {
-          appendGroup(fragment, group.letter, `Буква ${group.letter}`, group.books);
-        }
-      } else {
-        for (const book of sorted) fragment.append(createBookRow(book));
+      for (const group of groupBooksNewest(filtered)) {
+        appendGroup(
+          fragment,
+          group.label,
+          group.year === null ? group.label : `${group.year} год`,
+          group.books,
+          { showYear: false },
+        );
       }
     }
     els.list.append(fragment);

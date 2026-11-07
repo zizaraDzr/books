@@ -1,4 +1,4 @@
-const CACHE = "prochitano-v3";
+const CACHE = "prochitano-v4";
 
 const ASSETS = [
   "./",

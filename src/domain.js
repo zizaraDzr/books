@@ -27,7 +27,7 @@ export function normalizeSpaces(value) {
 }
 
 export function bookHaystack(book) {
-  return normalizeSearch(`${book.title} ${book.author}`);
+  return normalizeSearch(`${book.title} ${book.author} ${book.year ?? ""}`);
 }
 
 export function filterBooks(books, { query = "", format = "all" } = {}) {
@@ -40,47 +40,16 @@ export function filterBooks(books, { query = "", format = "all" } = {}) {
   });
 }
 
-export function sortBooks(books, mode = "title") {
+export function sortBooks(books, mode = "order") {
   const copy = [...books];
   if (mode === "new") {
     return copy.sort((a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0) || collator.compare(a.title, b.title));
   }
-  if (mode === "order") {
-    return copy.sort(
-      (a, b) =>
-        (a.number ?? Number.MAX_SAFE_INTEGER) - (b.number ?? Number.MAX_SAFE_INTEGER) ||
-        (a.addedAt ?? 0) - (b.addedAt ?? 0),
-    );
-  }
   return copy.sort(
     (a, b) =>
-      collator.compare(a.title, b.title) ||
-      collator.compare(a.author ?? "", b.author ?? "") ||
-      String(a.id).localeCompare(String(b.id)),
+      (a.number ?? Number.MAX_SAFE_INTEGER) - (b.number ?? Number.MAX_SAFE_INTEGER) ||
+      (a.addedAt ?? 0) - (b.addedAt ?? 0),
   );
-}
-
-export function groupLetter(title) {
-  const text = String(title ?? "").trim().replace(/^[«»"'“”„([\s]+/, "");
-  const first = Array.from(text)[0] ?? "#";
-  if (/[A-Za-zА-Яа-яЁё]/.test(first)) return first.toUpperCase();
-  return "#";
-}
-
-export function groupBooks(sortedBooks) {
-  const groups = [];
-  const byLetter = new Map();
-  for (const book of sortedBooks) {
-    const letter = groupLetter(book.title);
-    let group = byLetter.get(letter);
-    if (!group) {
-      group = { letter, books: [] };
-      byLetter.set(letter, group);
-      groups.push(group);
-    }
-    group.books.push(book);
-  }
-  return groups;
 }
 
 export function groupBooksByPeriod(books) {
@@ -100,6 +69,29 @@ export function groupBooksByPeriod(books) {
     ...group,
     label: group.year === null ? (index === 0 ? "До 2018" : "Без года") : String(group.year),
     showEnd: group.year !== null && group.books.length > 1 && index < groups.length - 1,
+  }));
+}
+
+export function groupBooksNewest(books) {
+  const byYear = new Map();
+  for (const book of books) {
+    const year = book.year ?? null;
+    if (!byYear.has(year)) byYear.set(year, []);
+    byYear.get(year).push(book);
+  }
+
+  const years = [...byYear.keys()].sort((a, b) => {
+    if (a === null) return 1;
+    if (b === null) return -1;
+    return b - a;
+  });
+
+  return years.map((year) => ({
+    year,
+    label: year === null ? "До 2018" : String(year),
+    books: [...byYear.get(year)].sort(
+      (a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0) || (b.number ?? 0) - (a.number ?? 0),
+    ),
   }));
 }
 
