@@ -201,7 +201,17 @@ await waitFor(async () => (await count()) === expected, "первый ренде
 assert.equal(await count(), expected, "все книги отрисованы");
 assert.equal((await text("#total-count")).trim(), `${expected} ${pluralBooks(expected)}`);
 assert.ok((await text("#audio-count")).includes("аудио"), "в подзаголовке есть счётчик аудио");
-assert.ok((await count(".group-letter")) > 20, "есть буквенные группы");
+const yearLabels = await evaluate(
+  '[...document.querySelectorAll(".group-letter")].map((heading) => heading.textContent)',
+);
+assert.deepEqual(yearLabels, ["2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "Без года"]);
+const knownNumber = await evaluate(`(() => {
+  const row = [...document.querySelectorAll(".book")].find(
+    (item) => item.querySelector(".book-title")?.textContent === "Пробуждение",
+  );
+  return row?.querySelector(".book-number")?.textContent ?? "";
+})()`);
+assert.equal(knownNumber, "639", "номер книги совпадает с docx");
 assert.equal(await text("#empty-title"), "Список пуст");
 
 const swState = await waitFor(async () => {
@@ -215,6 +225,12 @@ assert.equal(swState, "activated");
 
 await screenshot("home.png");
 
+await evaluate(`(() => {
+  const select = document.querySelector("#sort");
+  select.value = "title";
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+})()`);
+await waitFor(async () => (await count(".group-letter")) > 20, "алфавитные группы для проверки sticky");
 await evaluate(`(() => {
   const toolbarHeight = document.querySelector("#toolbar").getBoundingClientRect().height;
   const header = [...document.querySelectorAll(".group-letter")].find((item) => item.textContent === "Г");
@@ -235,7 +251,18 @@ assert.ok(
 );
 await screenshot("home-scrolled.png");
 
-await evaluate("window.scrollTo(0, 0)");
+await evaluate(`(() => {
+  const select = document.querySelector("#sort");
+  select.value = "year";
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+  window.scrollTo(0, 0);
+})()`);
+await waitFor(
+  async () =>
+    (await evaluate('document.querySelector(".group-letter")?.textContent')) === "2026",
+  "возврат к группировке по годам",
+);
+
 const harry = filterBooks(SEED, { query: "гарри" }).length;
 await setInput("#search", "гарри");
 await waitFor(async () => (await count()) === harry, "поиск по «гарри»");
@@ -246,9 +273,13 @@ await click("#clear-search");
 await waitFor(async () => (await count()) === expected, "очистка поиска");
 
 const audio = filterBooks(SEED, { format: "audio" }).length;
+const regular = filterBooks(SEED, { format: "book" }).length;
 await click('[data-format="audio"]');
 await waitFor(async () => (await count()) === audio, "фильтр аудио");
 assert.ok((await text("#result-text")).includes(`${audio} из ${expected}`));
+await click('[data-format="book"]');
+await waitFor(async () => (await count()) === regular, "фильтр обычных книг");
+assert.ok((await text("#result-text")).includes(`${regular} из ${expected}`));
 await click('[data-format="all"]');
 await waitFor(async () => (await count()) === expected, "сброс фильтра");
 
@@ -309,13 +340,20 @@ await sleep(350);
 assert.equal(await count(), expected + 1, "книга добавилась");
 assert.ok((await text("#toast-text")).includes("добавлена"), "тост о добавлении");
 assert.ok(
-  (await evaluate('localStorage.getItem("books:v1").includes("Тестовая книга")')),
+  (await evaluate('localStorage.getItem("books:v2").includes("Тестовая книга")')),
   "книга сохранена в localStorage",
 );
 assert.ok(
   await evaluate(`[...document.querySelectorAll(".book")].some((row) => row.textContent.includes("Тестовая книга"))`),
   "новая книга видна в списке",
 );
+const addedNumber = await evaluate(`(() => {
+  const row = [...document.querySelectorAll(".book")].find(
+    (item) => item.querySelector(".book-title")?.textContent === "Тестовая книга",
+  );
+  return row?.querySelector(".book-number")?.textContent ?? "";
+})()`);
+assert.equal(addedNumber, "766", "новая книга получает следующий номер docx");
 
 await evaluate(`(() => {
   const row = [...document.querySelectorAll(".book")].find((item) => item.textContent.includes("Тестовая книга"));
@@ -335,7 +373,7 @@ assert.ok(
   "новое название видно",
 );
 assert.ok(
-  (await evaluate('localStorage.getItem("books:v1").includes("Тестовая книга 2")')),
+  (await evaluate('localStorage.getItem("books:v2").includes("Тестовая книга 2")')),
   "новое название сохранено",
 );
 
@@ -371,7 +409,7 @@ await click("#delete-button");
 await click("#delete-button");
 await waitFor(async () => (await count()) === expected, "удаление тестовой книги");
 
-await evaluate('localStorage.removeItem("books:v1")');
+await evaluate('localStorage.removeItem("books:v2")');
 await send("Page.reload", { ignoreCache: true });
 await waitFor(async () => (await count()) === expected, "перезагрузка с seed-списком");
 await evaluate("window.scrollTo(0, 0)");
@@ -410,11 +448,47 @@ await send("Network.emulateNetworkConditions", {
 });
 console.log("  offline reload: OK");
 
+await evaluate(`(() => {
+  const data = JSON.parse(localStorage.getItem("books:v2"));
+  const legacy = {
+    version: 1,
+    books: data.books.map(({ number, ...book }) => ({
+      ...book,
+      format: book.format === "audio" ? "audio" : "paper",
+    })),
+  };
+  localStorage.removeItem("books:v2");
+  localStorage.setItem("books:v1", JSON.stringify(legacy));
+})()`);
+await send("Page.reload", { ignoreCache: true });
+await waitFor(async () => (await count()) === expected, "миграция старого localStorage");
+const migrated = await evaluate(`(() => {
+  const row = [...document.querySelectorAll(".book")].find(
+    (item) => item.querySelector(".book-title")?.textContent === "Пробуждение",
+  );
+  const regularRow = [...document.querySelectorAll(".book")].find(
+    (item) => item.querySelector(".book-title")?.textContent === "Дом у чертова озера",
+  );
+  return {
+    number: row?.querySelector(".book-number")?.textContent ?? "",
+    audioIcon: row?.querySelector(".book-icon")?.classList.contains("is-audio") ?? false,
+    regularFormat: regularRow?.querySelector(".book-icon")?.classList.contains("is-book") ?? false,
+    hasV2: Boolean(localStorage.getItem("books:v2")),
+  };
+})()`);
+assert.deepEqual(migrated, {
+  number: "639",
+  audioIcon: true,
+  regularFormat: true,
+  hasV2: true,
+});
+console.log("  migration v1 -> v2: OK");
+
 if (exceptions.length) {
   throw new Error(`Ошибки на странице:\n${exceptions.join("\n")}`);
 }
 
-console.log("Smoke OK: поиск, фильтр, добавление, редактирование, удаление, отмена и офлайн-оболочка.");
+console.log("Smoke OK: годы, номера, поиск, фильтр, CRUD, миграция v1 и офлайн-оболочка.");
 console.log(`Скриншоты: ${screenshots}`);
 
 await Promise.race([send("Browser.close").catch(() => {}), sleep(1000)]);
