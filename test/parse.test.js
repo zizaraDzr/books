@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseEntry, dedupeEntries } from "../src/parse.js";
+import { parseEntry } from "../src/parse.js";
 
 test("обычная запись с автором и аудио-пометкой", () => {
   assert.deepEqual(parseEntry("Гарри Поттер и Тайная комната - Джоан Роулинг (аудио книга) 2018 ГОД"), {
@@ -80,15 +80,4 @@ test("пустые строки и заголовок списка отбрас�
   assert.equal(parseEntry(""), null);
   assert.equal(parseEntry("   "), null);
   assert.equal(parseEntry("Прочитанные книги:"), null);
-});
-
-test("dedupeEntries убирает повторы по названию и автору", () => {
-  const entries = [
-    { title: "Гарри Поттер и Философский камень", author: "Джоан Роулинг", format: "audio", year: null },
-    { title: "Гарри Поттер и философский камень", author: "джоан роулинг", format: "audio", year: 2018 },
-    { title: "Другая", author: "", format: "book", year: null },
-  ];
-  const result = dedupeEntries(entries);
-  assert.equal(result.length, 2);
-  assert.equal(result[0].year, 2018);
 });

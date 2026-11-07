@@ -1,5 +1,3 @@
-import { dedupeBooks, normalizeSearch } from "./domain.js";
-
 const HEADER_RE = /^прочитанные книги:?$/i;
 const MARKER_RE = /\s*\((?:аудио\s*книга|книга с работы)\)/gi;
 const AUDIO_RE = /\(аудио\s*книга\)/i;
@@ -55,12 +53,4 @@ export function parseEntry(raw) {
     format,
     year,
   };
-}
-
-export function dedupeEntries(entries) {
-  return dedupeBooks(entries).map(({ id: _id, addedAt: _addedAt, ...entry }) => entry);
-}
-
-export function entryKey(entry) {
-  return `${normalizeSearch(entry.title)}|${normalizeSearch(entry.author)}`;
 }

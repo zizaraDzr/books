@@ -3,16 +3,17 @@ import assert from "node:assert/strict";
 
 import {
   FORMATS,
+  assignPeriodYears,
   filterBooks,
   formatLabel,
   groupBooks,
-  groupBooksByYear,
+  groupBooksByPeriod,
   groupLetter,
+  inferYearPeriods,
   normalizeSearch,
   pluralBooks,
   sortBooks,
   validateBookInput,
-  dedupeBooks,
 } from "../src/domain.js";
 
 const books = [
@@ -75,6 +76,10 @@ test("сортировка «сначала новые» ставит недав
   assert.deepEqual(sortBooks([...books, extra], "new").map((b) => b.id)[0], "7");
 });
 
+test("сортировка «по порядку» идёт по номерам docx", () => {
+  assert.deepEqual(sortBooks([...books].reverse(), "order").map((b) => b.number), [10, 20, 30, 40, 50, 60]);
+});
+
 test("группировка по первой букве", () => {
   assert.equal(groupLetter("«Сыщики»"), "С");
   assert.equal(groupLetter("451 градус"), "#");
@@ -85,26 +90,55 @@ test("группировка по первой букве", () => {
   assert.equal(groups.reduce((sum, g) => sum + g.books.length, 0), books.length);
 });
 
-test("группировка по годам: годы по убыванию, «Без года» в конце", () => {
-  const groups = groupBooksByYear(books);
-  assert.deepEqual(groups.map((g) => g.label), ["2024", "2021", "2018", "Без года"]);
-  assert.deepEqual(groups[0].books.map((b) => b.title), ["Ёлка"]);
-  assert.deepEqual(groups[1].books.map((b) => b.title), ["451 градус по Фаренгейту"]);
-  assert.equal(groups.at(-1).books.length, 3);
-  assert.equal(groups.reduce((sum, g) => sum + g.books.length, 0), books.length);
+test("хронологическая группировка: год в начале и конце блока", () => {
+  const rows = [
+    { id: "a", number: 1, title: "Альфа", author: "", format: "book", year: null, addedAt: 1 },
+    { id: "b", number: 2, title: "Бета", author: "", format: "book", year: 2018, addedAt: 2 },
+    { id: "c", number: 3, title: "Гамма", author: "", format: "book", year: 2019, addedAt: 3 },
+    { id: "d", number: 4, title: "Дельта", author: "", format: "book", year: 2019, addedAt: 4 },
+    { id: "e", number: 5, title: "Эпсилон", author: "", format: "book", year: 2026, addedAt: 5 },
+  ];
+  const groups = groupBooksByPeriod(rows);
+  assert.deepEqual(groups.map((g) => g.label), ["До 2018", "2018", "2019", "2026"]);
+  assert.deepEqual(groups.map((g) => g.showEnd), [false, false, true, false]);
+  assert.deepEqual(groups[2].books.map((b) => b.number), [3, 4]);
+  assert.equal(groups.reduce((sum, g) => sum + g.books.length, 0), rows.length);
 });
 
-test("внутри года книги идут по номерам docx, без года — по алфавиту", () => {
-  const rows = [
-    { id: "1", number: 20, title: "Яблоко", author: "", format: "book", year: 2024, addedAt: 1 },
-    { id: "2", number: 10, title: "Айва", author: "", format: "book", year: 2024, addedAt: 2 },
-    { id: "3", number: 5, title: "Бета", author: "", format: "book", year: null, addedAt: 3 },
-    { id: "4", number: 1, title: "Альфа", author: "", format: "book", year: null, addedAt: 4 },
-  ];
-  const groups = groupBooksByYear(rows);
-  assert.deepEqual(groups.map((g) => g.label), ["2024", "Без года"]);
-  assert.deepEqual(groups[0].books.map((b) => b.number), [10, 20]);
-  assert.deepEqual(groups[1].books.map((b) => b.title), ["Альфа", "Бета"]);
+test("периоды годов вычисляются по парным отметкам до удаления дублей", () => {
+  const entries = Array.from({ length: 10 }, (_, index) => ({
+    number: index + 1,
+    title: `Книга ${index + 1}`,
+    author: "",
+    format: "book",
+    year: null,
+  }));
+  entries[3].year = 2018;
+  entries[4].year = 2019;
+  entries[7].year = 2019;
+  entries[8].year = 2020;
+
+  const periods = inferYearPeriods(entries);
+  assert.deepEqual(
+    periods.map((period) => [period.year, period.start, period.end]),
+    [
+      [2018, 3, 3],
+      [2019, 4, 7],
+      [2020, 8, 9],
+    ],
+  );
+  assert.deepEqual(assignPeriodYears(entries, periods).map((entry) => entry.year), [
+    null,
+    null,
+    null,
+    2018,
+    2019,
+    2019,
+    2019,
+    2019,
+    2020,
+    2020,
+  ]);
 });
 
 test("склонение количества книг", () => {
@@ -139,57 +173,16 @@ test("валидация: год только целый и в разумных 
   assert.equal(validateBookInput({ title: "Книга", year: "2101" }, { books }).ok, false);
 });
 
-test("валидация: дубль по названию и автору не добавляется", () => {
-  const result = validateBookInput(
-    { title: "гарри поттер и философский камень", author: "джоан роулинг" },
-    { books },
-  );
-  assert.equal(result.ok, false);
-  assert.match(result.errors.title, /уже есть/i);
-
-  const self = validateBookInput(
-    { title: "Гарри Поттер и философский камень", author: "Джоан Роулинг" },
-    { books, excludeId: "1" },
-  );
-  assert.equal(self.ok, true);
+test("валидация: повторное прочтение не считается дублем", () => {
+  const result = validateBookInput({
+    title: "Гарри Поттер и философский камень",
+    author: "Джоан Роулинг",
+  });
+  assert.equal(result.ok, true);
 });
 
 test("валидация: формат проверяется", () => {
-  const result = validateBookInput({ title: "Книга", format: "vinyl" }, { books });
+  const result = validateBookInput({ title: "Книга", format: "vinyl" });
   assert.equal(result.ok, false);
   assert.ok(result.errors.format);
-});
-
-test("dedupeBooks убирает повторы без учёта регистра и добирает недостающие данные", () => {
-  const input = [
-    { id: "a", title: "Гарри Поттер", author: "Джоан Роулинг", format: "book", year: null, addedAt: 1 },
-    { id: "b", title: "гарри поттер", author: "джоан роулинг", format: "audio", year: 2018, addedAt: 2 },
-    { id: "c", title: "Другая", author: "", format: "book", year: null, addedAt: 3 },
-  ];
-  const result = dedupeBooks(input);
-  assert.equal(result.length, 2);
-  assert.equal(result[0].format, "audio");
-  assert.equal(result[0].year, 2018);
-});
-
-test("dedupeBooks склеивает длинный дубль без автора, но не короткие названия", () => {
-  const input = [
-    { id: "a", title: "Гарри Поттер и проклятое дитя", author: "", format: "book", year: null, addedAt: 1 },
-    {
-      id: "b",
-      title: "Гарри Поттер и проклятое дитя",
-      author: "Джоан Роулинг, Джек Торн",
-      format: "audio",
-      year: null,
-      addedAt: 2,
-    },
-    { id: "c", title: "Маскарад", author: "", format: "book", year: null, addedAt: 3 },
-    { id: "d", title: "Маскарад", author: "Александр Дюма", format: "audio", year: null, addedAt: 4 },
-  ];
-  const result = dedupeBooks(input);
-  assert.equal(result.length, 3);
-  assert.equal(result[0].id, "b");
-  assert.equal(result[0].format, "audio");
-  assert.equal(result[0].author, "Джоан Роулинг, Джек Торн");
-  assert.deepEqual(result.slice(1).map((book) => book.id), ["c", "d"]);
 });

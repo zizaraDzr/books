@@ -45,6 +45,13 @@ export function sortBooks(books, mode = "title") {
   if (mode === "new") {
     return copy.sort((a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0) || collator.compare(a.title, b.title));
   }
+  if (mode === "order") {
+    return copy.sort(
+      (a, b) =>
+        (a.number ?? Number.MAX_SAFE_INTEGER) - (b.number ?? Number.MAX_SAFE_INTEGER) ||
+        (a.addedAt ?? 0) - (b.addedAt ?? 0),
+    );
+  }
   return copy.sort(
     (a, b) =>
       collator.compare(a.title, b.title) ||
@@ -76,32 +83,66 @@ export function groupBooks(sortedBooks) {
   return groups;
 }
 
-export function groupBooksByYear(books) {
-  const byYear = new Map();
-  for (const book of books) {
-    const year = book.year ?? null;
-    if (!byYear.has(year)) byYear.set(year, []);
-    byYear.get(year).push(book);
+export function groupBooksByPeriod(books) {
+  const sorted = sortBooks(books, "order");
+  const groups = [];
+
+  for (const book of sorted) {
+    const last = groups.at(-1);
+    if (!last || last.year !== book.year) {
+      groups.push({ year: book.year ?? null, books: [book] });
+    } else {
+      last.books.push(book);
+    }
   }
 
-  const years = [...byYear.keys()].sort((a, b) => {
-    if (a === null) return 1;
-    if (b === null) return -1;
-    return b - a;
-  });
+  return groups.map((group, index) => ({
+    ...group,
+    label: group.year === null ? (index === 0 ? "До 2018" : "Без года") : String(group.year),
+    showEnd: group.year !== null && group.books.length > 1 && index < groups.length - 1,
+  }));
+}
 
-  return years.map((year) => {
-    const group = byYear.get(year);
-    const books =
-      year === null
-        ? sortBooks(group, "title")
-        : [...group].sort(
-            (a, b) =>
-              (a.number ?? Number.MAX_SAFE_INTEGER) - (b.number ?? Number.MAX_SAFE_INTEGER) ||
-              collator.compare(a.title, b.title),
-          );
-    return { year, label: year === null ? "Без года" : String(year), books };
-  });
+export function inferYearPeriods(entries) {
+  const markers = entries
+    .map((entry, index) => (entry.year ? { year: entry.year, index } : null))
+    .filter(Boolean);
+  if (!markers.length) return [];
+
+  const byYear = new Map();
+  for (const marker of markers) {
+    if (!byYear.has(marker.year)) byYear.set(marker.year, []);
+    byYear.get(marker.year).push(marker);
+  }
+
+  const periods = [];
+  for (const [year, list] of byYear) {
+    if (list.length >= 2) {
+      periods.push({ year, start: list[0].index, end: list.at(-1).index, boundaries: 2 });
+      continue;
+    }
+
+    const single = list[0];
+    const hasLater = markers.some((marker) => marker.year > year);
+    periods.push({
+      year,
+      start: single.index,
+      end: hasLater ? single.index : entries.length - 1,
+      boundaries: 1,
+    });
+  }
+
+  return periods.sort((a, b) => a.start - b.start);
+}
+
+export function assignPeriodYears(entries, periods) {
+  const assigned = entries.map((entry) => ({ ...entry, year: null }));
+  for (const period of periods) {
+    for (let index = period.start; index <= period.end; index += 1) {
+      assigned[index].year = period.year;
+    }
+  }
+  return assigned;
 }
 
 export function pluralBooks(count) {
@@ -118,49 +159,7 @@ export function bookKey(book) {
   return `${normalizeSearch(book.title)}|${normalizeSearch(book.author)}`;
 }
 
-function mergeMissing(target, source) {
-  if (!target.year && source.year) target.year = source.year;
-  if (target.format !== "audio" && source.format === "audio") target.format = "audio";
-  if (!target.author && source.author) target.author = source.author;
-}
-
-export function dedupeBooks(books) {
-  const exact = new Map();
-  for (const book of books) {
-    const key = bookKey(book);
-    const existing = exact.get(key);
-    if (!existing) {
-      exact.set(key, { ...book });
-      continue;
-    }
-    mergeMissing(existing, book);
-  }
-
-  const values = [...exact.values()];
-  const byTitle = new Map();
-  for (const book of values) {
-    const title = normalizeSearch(book.title);
-    if (!byTitle.has(title)) byTitle.set(title, []);
-    byTitle.get(title).push(book);
-  }
-
-  const removed = new Set();
-  for (const [title, group] of byTitle) {
-    if (group.length < 2) continue;
-    const wordCount = title.split(" ").filter(Boolean).length;
-    const authored = group.filter((book) => book.author);
-    const anonymous = group.filter((book) => !book.author);
-    // Короткие названия вроде «Маскарад» могут быть разными произведениями,
-    // поэтому склеиваем только достаточно длинные названия с одним автором.
-    if (wordCount < 3 || authored.length !== 1 || anonymous.length !== 1) continue;
-    mergeMissing(authored[0], anonymous[0]);
-    removed.add(anonymous[0]);
-  }
-
-  return values.filter((book) => !removed.has(book));
-}
-
-export function validateBookInput(input = {}, { books = [], excludeId = null } = {}) {
+export function validateBookInput(input = {}) {
   const errors = {};
   const title = normalizeSpaces(input.title);
   const author = normalizeSpaces(input.author);
@@ -191,12 +190,6 @@ export function validateBookInput(input = {}, { books = [], excludeId = null } =
         year = parsed;
       }
     }
-  }
-
-  if (!errors.title) {
-    const key = `${normalizeSearch(title)}|${normalizeSearch(author)}`;
-    const duplicate = books.some((book) => book.id !== excludeId && bookKey(book) === key);
-    if (duplicate) errors.title = "Такая книга уже есть в списке";
   }
 
   return {
