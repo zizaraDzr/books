@@ -204,7 +204,18 @@ assert.ok((await text("#audio-count")).includes("аудио"), "в подзаг�
 const yearLabels = await evaluate(
   '[...document.querySelectorAll(".group-letter")].map((heading) => heading.textContent)',
 );
-assert.deepEqual(yearLabels, ["2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "Без года"]);
+assert.deepEqual(yearLabels, [
+  "До 2018",
+  "2018",
+  "2019",
+  "2020",
+  "2021",
+  "2022",
+  "2023",
+  "2024",
+  "2025",
+  "2026",
+]);
 const knownNumber = await evaluate(`(() => {
   const row = [...document.querySelectorAll(".book")].find(
     (item) => item.querySelector(".book-title")?.textContent === "Пробуждение",
@@ -212,6 +223,16 @@ const knownNumber = await evaluate(`(() => {
   return row?.querySelector(".book-number")?.textContent ?? "";
 })()`);
 assert.equal(knownNumber, "639", "номер книги совпадает с docx");
+const yearMarks = await evaluate(`(() => {
+  const labels = [...document.querySelectorAll(".group-letter, .year-end")].map((element) => element.textContent);
+  return {
+    endCount: document.querySelectorAll(".year-end").length,
+    count2025: labels.filter((label) => label === "2025").length,
+    count2018: labels.filter((label) => label === "2018").length,
+    count2026: labels.filter((label) => label === "2026").length,
+  };
+})()`);
+assert.deepEqual(yearMarks, { endCount: 7, count2025: 2, count2018: 1, count2026: 1 });
 assert.equal(await text("#empty-title"), "Список пуст");
 
 const swState = await waitFor(async () => {
@@ -224,6 +245,21 @@ const swState = await waitFor(async () => {
 assert.equal(swState, "activated");
 
 await screenshot("home.png");
+
+await evaluate(`(() => {
+  const toolbarHeight = document.querySelector("#toolbar").getBoundingClientRect().height;
+  const heading = [...document.querySelectorAll(".group-letter")].find((item) => item.textContent === "2025");
+  window.scrollTo(0, heading.getBoundingClientRect().top + window.scrollY - toolbarHeight - 24);
+})()`);
+await sleep(300);
+await screenshot("year-start.png");
+
+await evaluate(`(() => {
+  const end = [...document.querySelectorAll(".year-end")].find((item) => item.textContent === "2025");
+  window.scrollTo(0, end.getBoundingClientRect().top + window.scrollY - 420);
+})()`);
+await sleep(300);
+await screenshot("year-end.png");
 
 await evaluate(`(() => {
   const select = document.querySelector("#sort");
@@ -253,14 +289,14 @@ await screenshot("home-scrolled.png");
 
 await evaluate(`(() => {
   const select = document.querySelector("#sort");
-  select.value = "year";
+  select.value = "order";
   select.dispatchEvent(new Event("change", { bubbles: true }));
   window.scrollTo(0, 0);
 })()`);
 await waitFor(
   async () =>
-    (await evaluate('document.querySelector(".group-letter")?.textContent')) === "2026",
-  "возврат к группировке по годам",
+    (await evaluate('document.querySelector(".group-letter")?.textContent')) === "До 2018",
+  "возврат к хронологическому порядку",
 );
 
 const harry = filterBooks(SEED, { query: "гарри" }).length;
@@ -308,6 +344,44 @@ assert.ok((await text("#menu")).includes("Экспорт"), "в меню ест�
 await evaluate('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))');
 assert.equal(await evaluate('document.querySelector("#menu").hidden'), true, "меню закрывается по Escape");
 
+await evaluate('window.print = () => { window.__printed = true; }');
+await click("#menu-button");
+await click("#pdf-button");
+const printState = await evaluate(`(() => {
+  const labels = [...document.querySelectorAll(".print-year, .print-year-end")].map(
+    (element) => element.textContent,
+  );
+  return {
+    printed: window.__printed === true,
+    entries: document.querySelectorAll(".print-entry").length,
+    years: [...document.querySelectorAll(".print-year")].map((element) => element.textContent),
+    endCount: document.querySelectorAll(".print-year-end").length,
+    count2025: labels.filter((label) => label === "2025").length,
+  };
+})()`);
+assert.equal(printState.printed, true, "кнопка PDF открывает печать");
+assert.equal(printState.entries, expected, "в PDF попадают все книги");
+assert.deepEqual(printState.years, [
+  "До 2018",
+  "2018",
+  "2019",
+  "2020",
+  "2021",
+  "2022",
+  "2023",
+  "2024",
+  "2025",
+  "2026",
+]);
+assert.equal(printState.endCount, 7);
+assert.equal(printState.count2025, 2, "в PDF год 2025 тоже стоит в начале и конце");
+const pdf = await send("Page.printToPDF", { printBackground: true, preferCSSPageSize: true });
+const pdfBytes = Buffer.from(pdf.data, "base64");
+assert.ok(pdfBytes.length > 10000, "PDF сгенерировался");
+await writeFile(path.join(screenshots, "export.pdf"), pdfBytes);
+console.log(`  PDF: screenshots/export.pdf (${pdfBytes.length} байт)`);
+await evaluate('document.querySelector("#print-doc").replaceChildren()');
+
 await setInput("#search", "нет такой книги 987654");
 await waitFor(async () => (await text("#empty-title")) === "Ничего не нашлось", "пустой результат");
 await click("#empty-action");
@@ -340,7 +414,7 @@ await sleep(350);
 assert.equal(await count(), expected + 1, "книга добавилась");
 assert.ok((await text("#toast-text")).includes("добавлена"), "тост о добавлении");
 assert.ok(
-  (await evaluate('localStorage.getItem("books:v2").includes("Тестовая книга")')),
+  (await evaluate('localStorage.getItem("books:v4").includes("Тестовая книга")')),
   "книга сохранена в localStorage",
 );
 assert.ok(
@@ -373,7 +447,7 @@ assert.ok(
   "новое название видно",
 );
 assert.ok(
-  (await evaluate('localStorage.getItem("books:v2").includes("Тестовая книга 2")')),
+  (await evaluate('localStorage.getItem("books:v4").includes("Тестовая книга 2")')),
   "новое название сохранено",
 );
 
@@ -409,7 +483,7 @@ await click("#delete-button");
 await click("#delete-button");
 await waitFor(async () => (await count()) === expected, "удаление тестовой книги");
 
-await evaluate('localStorage.removeItem("books:v2")');
+await evaluate('localStorage.removeItem("books:v4")');
 await send("Page.reload", { ignoreCache: true });
 await waitFor(async () => (await count()) === expected, "перезагрузка с seed-списком");
 await evaluate("window.scrollTo(0, 0)");
@@ -449,20 +523,23 @@ await send("Network.emulateNetworkConditions", {
 console.log("  offline reload: OK");
 
 await evaluate(`(() => {
-  const data = JSON.parse(localStorage.getItem("books:v2"));
+  const data = JSON.parse(localStorage.getItem("books:v4"));
   const legacy = {
-    version: 1,
-    books: data.books.map(({ number, ...book }) => ({
+    version: 2,
+    books: data.books.map((book) => ({
       ...book,
+      year: null,
       format: book.format === "audio" ? "audio" : "paper",
     })),
   };
-  localStorage.removeItem("books:v2");
-  localStorage.setItem("books:v1", JSON.stringify(legacy));
+  localStorage.removeItem("books:v4");
+  localStorage.setItem("books:v2", JSON.stringify(legacy));
 })()`);
 await send("Page.reload", { ignoreCache: true });
 await waitFor(async () => (await count()) === expected, "миграция старого localStorage");
 const migrated = await evaluate(`(() => {
+  const stored = JSON.parse(localStorage.getItem("books:v4"));
+  const byNumber = new Map(stored.books.map((book) => [book.number, book]));
   const row = [...document.querySelectorAll(".book")].find(
     (item) => item.querySelector(".book-title")?.textContent === "Пробуждение",
   );
@@ -473,6 +550,10 @@ const migrated = await evaluate(`(() => {
     number: row?.querySelector(".book-number")?.textContent ?? "",
     audioIcon: row?.querySelector(".book-icon")?.classList.contains("is-audio") ?? false,
     regularFormat: regularRow?.querySelector(".book-icon")?.classList.contains("is-book") ?? false,
+    year2018: byNumber.get(355)?.year ?? null,
+    year2025: byNumber.get(639)?.year ?? null,
+    year2026: byNumber.get(729)?.year ?? null,
+    hasV4: Boolean(localStorage.getItem("books:v4")),
     hasV2: Boolean(localStorage.getItem("books:v2")),
   };
 })()`);
@@ -480,15 +561,19 @@ assert.deepEqual(migrated, {
   number: "639",
   audioIcon: true,
   regularFormat: true,
+  year2018: 2018,
+  year2025: 2025,
+  year2026: 2026,
+  hasV4: true,
   hasV2: true,
 });
-console.log("  migration v1 -> v2: OK");
+console.log("  migration v2 -> v4: OK");
 
 if (exceptions.length) {
   throw new Error(`Ошибки на странице:\n${exceptions.join("\n")}`);
 }
 
-console.log("Smoke OK: годы, номера, поиск, фильтр, CRUD, миграция v1 и офлайн-оболочка.");
+console.log("Smoke OK: 765 записей, годы, номера, поиск, фильтр, CRUD, PDF, миграция и офлайн.");
 console.log(`Скриншоты: ${screenshots}`);
 
 await Promise.race([send("Browser.close").catch(() => {}), sleep(1000)]);
